@@ -1,5 +1,6 @@
 use crate::detect::DetectionResult;
 use serde_json::{Map, Value};
+use std::io::Write;
 
 /// Test display order.
 const TEST_DISPLAY_ORDER: &[&str] = &[
@@ -168,6 +169,141 @@ fn render_meta(tests: &Map<String, Value>) {
             "Server Meta", region, version, elapsed
         );
     }
+}
+
+// ── Bulk output ──────────────────────────────────────────────────────
+
+/// Aggregate verdict for a single proxy scan.
+pub enum BulkStatus {
+    Clean,
+    Detected,
+}
+
+/// Extracted verdict fields from a detection result.
+struct Verdict {
+    proxy_detected: bool,
+    vpn_detected: bool,
+    proxy_positive: i64,
+    proxy_total: i64,
+    vpn_positive: i64,
+    vpn_total: i64,
+}
+
+fn extract_verdict(tests: &Map<String, Value>) -> Verdict {
+    let proxy = tests.get("proxy");
+    let vpn = tests.get("vpn");
+
+    Verdict {
+        proxy_detected: proxy
+            .and_then(|v| v.get("isProxy"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        vpn_detected: vpn
+            .and_then(|v| v.get("isVpn"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        proxy_positive: proxy
+            .and_then(|v| v.get("numPositiveTests"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        proxy_total: proxy
+            .and_then(|v| v.get("numTests"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        vpn_positive: vpn
+            .and_then(|v| v.get("numPositiveTests"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        vpn_total: vpn
+            .and_then(|v| v.get("numTests"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+    }
+}
+
+fn format_verdict_field(label: &str, detected: bool, positive: i64, total: i64) -> String {
+    if detected {
+        format!("DETECTED({}/{})", positive, total)
+    } else {
+        label.to_string()
+    }
+}
+
+/// Classify a detection result as Clean or Detected.
+pub fn classify_result(result: &DetectionResult) -> BulkStatus {
+    let verdict = extract_verdict(&result.tests);
+    if verdict.proxy_detected || verdict.vpn_detected {
+        BulkStatus::Detected
+    } else {
+        BulkStatus::Clean
+    }
+}
+
+/// Print a compact one-liner for a completed bulk scan.
+pub fn render_bulk_line(
+    proxy_display: &str,
+    result: &DetectionResult,
+    elapsed_secs: f64,
+    status: &BulkStatus,
+) {
+    let verdict = extract_verdict(&result.tests);
+    let proxy_tag = format_verdict_field("clean", verdict.proxy_detected, verdict.proxy_positive, verdict.proxy_total);
+    let vpn_tag = format_verdict_field("clean", verdict.vpn_detected, verdict.vpn_positive, verdict.vpn_total);
+
+    let icon = match status {
+        BulkStatus::Detected => "[!!]",
+        BulkStatus::Clean => "[ok]",
+    };
+
+    println!(
+        "{} {:<30} exit={:<15} proxy={:<16} vpn={:<16} {:.1}s",
+        icon, proxy_display, result.exit_ip, proxy_tag, vpn_tag, elapsed_secs,
+    );
+}
+
+/// Print an error line for a failed bulk scan.
+pub fn render_bulk_error(proxy_display: &str, err: &str, elapsed_secs: f64) {
+    println!(
+        "[ER] {:<30} error: {:<39} {:.1}s",
+        proxy_display, err, elapsed_secs,
+    );
+}
+
+/// Print a single NDJSON line for a successful scan.
+pub fn render_bulk_json_line(proxy_raw: &str, result: &DetectionResult) {
+    let line = serde_json::json!({
+        "proxy": proxy_raw,
+        "exit_ip": result.exit_ip,
+        "result": result.raw_json,
+        "error": null,
+    });
+    println!("{}", serde_json::to_string(&line).unwrap_or_default());
+}
+
+/// Print a single NDJSON line for a failed scan.
+pub fn render_bulk_json_error(proxy_raw: &str, err: &str) {
+    let line = serde_json::json!({
+        "proxy": proxy_raw,
+        "exit_ip": null,
+        "result": null,
+        "error": err,
+    });
+    println!("{}", serde_json::to_string(&line).unwrap_or_default());
+}
+
+/// Print the final summary block to stderr.
+pub fn render_bulk_summary(total: usize, clean: usize, detected: usize, errors: usize) {
+    let divider = "=".repeat(64);
+    let mut out = std::io::stderr();
+    let _ = writeln!(out);
+    let _ = writeln!(out, "{}", divider);
+    let _ = writeln!(out, "  Bulk Scan Summary");
+    let _ = writeln!(out, "{}", divider);
+    let _ = writeln!(out, "  Total:    {}", total);
+    let _ = writeln!(out, "  Clean:    {}", clean);
+    let _ = writeln!(out, "  Detected: {}", detected);
+    let _ = writeln!(out, "  Errors:   {}", errors);
+    let _ = writeln!(out, "{}", divider);
 }
 
 fn render_verbose_info(key: &str, info: &Value) {

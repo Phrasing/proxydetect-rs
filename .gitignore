@@ -2,10 +2,10 @@
 target/
 **/*.rs.bk
 
-# Added by user request
 .claude/
 
 # Editor/Temp files
+proxies.txt
 .vscode/
 .idea/
 *.swp
