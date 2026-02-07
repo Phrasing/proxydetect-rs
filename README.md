@@ -1,18 +1,22 @@
-# Proxy Detector (Rust)
+# proxydetect-rs
 
-A high-performance, asynchronous CLI tool designed to detect proxy and VPN usage through advanced network fingerprinting and behavioral analysis.
+A CLI tool designed to detect proxy and VPN usage through advanced network fingerprinting using proxydetect.live private API.
 
 ## Features
-
-- **TLS Fingerprinting**: Emulates modern browser TLS handshakes (Chrome, Firefox, Safari) using `wreq` to evade basic anti-bot detection.
-- **Latency Analysis**: Measures WebSocket and TCP/IP latencies to identify proxy routing anomalies.
-- **Browser Emulation**: Mimics browser header orders and values for specific versions (e.g., Chrome 143, Safari 18).
-- **Bandwidth Tracking**: detailed tracking of bandwidth usage during detection scans.
-- **4-Phase Detection Protocol**:
-  1.  **Configuration**: Fetches session configuration and exit IP.
-  2.  **Latency Probing**: Concurrent WebSocket and image load latency measurements.
-  3.  **Telemetry**: Submits encrypted client environment data (timezones, screen, etc.).
-  4.  **Analysis**: Polls the analysis engine for the final verdict.
+- HTTP Headers Test
+- IP belongs to Hosting Provider
+- IP on Proxy List
+- IP on VPN List
+- VPN Exit Node Enumeration
+- TOR Detection Test
+- Passive AI-based Proxy Detection
+- TCP/IP Fingerprint Test
+- Timezone Test
+- Network Behavior Test
+- WebRTC IP Leak Test
+- Network Flow Pattern Test
+- Latency Test
+- High Latency Test 
 
 ## Usage
 
