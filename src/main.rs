@@ -31,6 +31,40 @@ struct Cli {
     json: bool,
 }
 
+fn normalize_proxy(proxy_str: &str) -> String {
+    // If it already looks like a URL with user info (contains @), trust it.
+    if proxy_str.contains('@') {
+        if !proxy_str.contains("://") {
+            return format!("http://{}", proxy_str);
+        }
+        return proxy_str.to_string();
+    }
+
+    let (scheme, rest) = if let Some(idx) = proxy_str.find("://") {
+        (&proxy_str[..idx], &proxy_str[idx + 3..])
+    } else {
+        ("http", proxy_str)
+    };
+
+    let parts: Vec<&str> = rest.split(':').collect();
+    if parts.len() >= 4 {
+        // Simple heuristic: 2nd part must be a port number (host:port:user:pass)
+        if parts[1].parse::<u16>().is_ok() {
+            let host = parts[0];
+            let port = parts[1];
+            let user = parts[2];
+            let pass = parts[3..].join(":");
+            return format!("{}://{}:{}@{}:{}", scheme, user, pass, host, port);
+        }
+    }
+
+    if !proxy_str.contains("://") {
+        return format!("{}://{}", scheme, proxy_str);
+    }
+
+    proxy_str.to_string()
+}
+
 fn mask_proxy(proxy_url: &str) -> String {
     if let Some(idx) = proxy_url.find('@') {
         let scheme_end = proxy_url.find("://").map(|i| i + 3).unwrap_or(0);
@@ -45,12 +79,14 @@ fn mask_proxy(proxy_url: &str) -> String {
 async fn main() {
     let cli = Cli::parse();
 
+    let proxy_url = if cli.proxy.is_empty() {
+        None
+    } else {
+        Some(normalize_proxy(&cli.proxy))
+    };
+
     let opts = Options {
-        proxy_url: if cli.proxy.is_empty() {
-            None
-        } else {
-            Some(cli.proxy.clone())
-        },
+        proxy_url: proxy_url.clone(),
         browser_name: cli.browser.clone(),
         timezone_iana: if cli.timezone.is_empty() {
             None
