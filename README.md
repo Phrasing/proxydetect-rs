@@ -8,15 +8,11 @@ A CLI tool designed to detect proxy and VPN usage through advanced network finge
 - IP on Proxy List
 - IP on VPN List
 - VPN Exit Node Enumeration
-- TOR Detection Test
 - Passive AI-based Proxy Detection
 - TCP/IP Fingerprint Test
-- Timezone Test
 - Network Behavior Test
-- WebRTC IP Leak Test
 - Network Flow Pattern Test
 - Latency Test
-- High Latency Test 
 
 ## Usage
 
@@ -34,17 +30,7 @@ cargo run
 cargo run -- --proxy http://user:pass@1.2.3.4:8080
 ```
 
-### JSON Output
+### Bulk scan
 ```bash
-cargo run -- --json
+cargo run -- --file proxies.txt
 ```
-
-## Build
-
-```bash
-cargo build --release
-```
-
-## License
-
-MIT
