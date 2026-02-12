@@ -8,12 +8,15 @@ use crate::browser::{
 };
 use crate::timezone;
 use std::time::{Duration, Instant};
+use wreq_util::tower::delay::JitterDelayLayer;
 
 pub use config::{parse_config, ServerConfig};
 pub use payload::{build_payload, ClientPayload};
 pub use result::{parse_result, DetectionResult};
 
 const ENGINE_ENDPOINT: &str = "https://engine.proxydetect.live";
+const TELEMETRY_JITTER_BASE_MS: u64 = 350;
+const TELEMETRY_JITTER_PCT: f64 = 0.5;
 
 /// Progressive backoff schedule (in milliseconds).
 const POLL_INTERVALS: &[u64] = &[
@@ -43,7 +46,17 @@ pub async fn run(
 
     log(&format!("Using browser preset: {}", preset.name));
 
-    let mut builder = wreq::Client::builder().emulation(preset.emulation.clone());
+    let telemetry_jitter = JitterDelayLayer::new(
+        Duration::from_millis(TELEMETRY_JITTER_BASE_MS),
+        TELEMETRY_JITTER_PCT,
+    )
+    .when(|req: &tokio_tungstenite::tungstenite::http::Request<_>| {
+        req.method().as_str() == "POST" && req.uri().path() == "/s"
+    });
+
+    let mut builder = wreq::Client::builder()
+        .emulation(preset.emulation)
+        .layer(telemetry_jitter);
 
     if let Some(ref proxy) = opts.proxy_url {
         builder = builder.proxy(wreq::Proxy::all(proxy)?);
@@ -127,6 +140,13 @@ pub async fn run(
     };
     total_bytes += ws_result.bytes_sent + ws_result.bytes_received;
 
+    let ws_latencies_for_payload: Vec<f64> = if ws_result.latencies.is_empty() {
+        log("  WebSocket latencies unavailable; using image RTTs as fallback");
+        image_latencies.clone()
+    } else {
+        ws_result.latencies.clone()
+    };
+
     let elapsed_ms = start_time.elapsed().as_millis() as f64;
     log("Submitting telemetry...");
     let payload = build_payload(
@@ -134,7 +154,7 @@ pub async fn run(
         &preset,
         &tz_info,
         &image_latencies,
-        &ws_result.latencies,
+        &ws_latencies_for_payload,
         loaded_ms,
         elapsed_ms,
     );
@@ -218,25 +238,44 @@ async fn phase3_submit_telemetry(
     let payload_len = payload_json.len() as u64;
 
     let url = format!("{}/s", ENGINE_ENDPOINT);
-    let headers = beacon_headers(preset);
+    let max_attempts: u32 = 4;
 
-    let resp = client
-        .post(&url)
-        .headers(headers)
-        .body(payload_json)
-        .send()
-        .await?;
+    for attempt in 0..max_attempts {
+        let headers = beacon_headers(preset);
+        let resp = client
+            .post(&url)
+            .headers(headers)
+            .body(payload_json.clone())
+            .send()
+            .await?;
 
-    let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
-    let response_len = body.len() as u64;
-    log(&format!("  Server response: status {}", status));
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        let response_len = body.len() as u64;
+        log(&format!("  Server response: status {}", status));
 
-    if status.as_u16() >= 400 {
-        return Err(format!("server rejected telemetry (status {}): {}", status, body).into());
+        if status.as_u16() >= 500 && attempt < max_attempts - 1 {
+            let base_ms: u64 = if attempt == 0 { 2000 } else { 4000 };
+            let jitter_ms = rand::random::<u64>() % 2000 + 1000;
+            let delay_ms = base_ms + jitter_ms;
+            log(&format!(
+                "  Telemetry 5xx (attempt {}/{}), retrying in {}ms...",
+                attempt + 1,
+                max_attempts,
+                delay_ms
+            ));
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            continue;
+        }
+
+        if status.as_u16() >= 400 {
+            return Err(format!("server rejected telemetry (status {}): {}", status, body).into());
+        }
+
+        return Ok(HTTP_OVERHEAD_PER_REQUEST + payload_len + response_len);
     }
 
-    Ok(HTTP_OVERHEAD_PER_REQUEST + payload_len + response_len)
+    Err("telemetry submission failed after all retry attempts".into())
 }
 
 async fn phase4_poll(
@@ -250,9 +289,7 @@ async fn phase4_poll(
     let mut bytes: u64 = 0;
 
     let mut schedule: Vec<u64> = POLL_INTERVALS.to_vec();
-    for _ in 0..10 {
-        schedule.push(12000);
-    }
+    schedule.extend(std::iter::repeat_n(12000, 10));
 
     let mut last_result = DetectionResult::default();
 

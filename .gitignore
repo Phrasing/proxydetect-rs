@@ -3,7 +3,7 @@ target/
 **/*.rs.bk
 
 .claude/
-
+*.csv
 # Editor/Temp files
 proxies.txt
 .vscode/

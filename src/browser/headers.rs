@@ -268,6 +268,70 @@ pub fn beacon_headers(preset: &Preset) -> HeaderMap {
     headers
 }
 
+/// Headers for GET https://api.ipapi.is/ (ipapi.is frontend fetch context).
+pub fn ipapi_headers(preset: &Preset) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+
+    if is_chrome(preset) {
+        headers.insert(
+            "Sec-Ch-Ua-Platform",
+            HeaderValue::from_static("\"Windows\""),
+        );
+        headers.insert(
+            "User-Agent",
+            HeaderValue::from_str(preset.user_agent).unwrap(),
+        );
+        headers.insert(
+            "Sec-Ch-Ua",
+            HeaderValue::from_static(chrome_sec_ch_ua(preset)),
+        );
+        headers.insert("Sec-Ch-Ua-Mobile", HeaderValue::from_static("?0"));
+        headers.insert("Accept", HeaderValue::from_static("*/*"));
+        headers.insert("Origin", HeaderValue::from_static("https://ipapi.is"));
+        headers.insert("Sec-Fetch-Site", HeaderValue::from_static("same-site"));
+        headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
+        headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("empty"));
+        headers.insert("Referer", HeaderValue::from_static("https://ipapi.is/"));
+        headers.insert(
+            "Accept-Language",
+            HeaderValue::from_static("en-US,en;q=0.9"),
+        );
+        headers.insert("Priority", HeaderValue::from_static("u=1, i"));
+    } else if is_firefox(preset) {
+        headers.insert(
+            "User-Agent",
+            HeaderValue::from_str(preset.user_agent).unwrap(),
+        );
+        headers.insert("Accept", HeaderValue::from_static("*/*"));
+        headers.insert("Origin", HeaderValue::from_static("https://ipapi.is"));
+        headers.insert("Sec-Fetch-Site", HeaderValue::from_static("same-site"));
+        headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
+        headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("empty"));
+        headers.insert("Referer", HeaderValue::from_static("https://ipapi.is/"));
+        headers.insert(
+            "Accept-Language",
+            HeaderValue::from_static("en-US,en;q=0.5"),
+        );
+    } else if is_safari(preset) {
+        headers.insert(
+            "User-Agent",
+            HeaderValue::from_str(preset.user_agent).unwrap(),
+        );
+        headers.insert("Accept", HeaderValue::from_static("*/*"));
+        headers.insert("Origin", HeaderValue::from_static("https://ipapi.is"));
+        headers.insert("Sec-Fetch-Site", HeaderValue::from_static("same-site"));
+        headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
+        headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("empty"));
+        headers.insert("Referer", HeaderValue::from_static("https://ipapi.is/"));
+        headers.insert(
+            "Accept-Language",
+            HeaderValue::from_static("en-US,en;q=0.9"),
+        );
+    }
+
+    headers
+}
+
 /// Headers for GET /i?&uuid= (polling context).
 pub fn poll_headers(preset: &Preset) -> HeaderMap {
     let mut headers = HeaderMap::new();

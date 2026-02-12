@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 wreq = { git = "https://github.com/0x676e67/wreq", branch = "main" }
-wreq-util = { git = "https://github.com/0x676e67/wreq-util", branch = "main" }
+wreq-util = { git = "https://github.com/0x676e67/wreq-util", branch = "main", features = ["tower-delay"] }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

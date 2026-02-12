@@ -1984,6 +1984,9 @@ name = "wreq-util"
 version = "3.0.0-rc.9"
 source = "git+https://github.com/0x676e67/wreq-util?branch=main#7e19958572537596668e9e7937bf0e29ca01151b"
 dependencies = [
+ "pin-project-lite",
+ "tokio",
+ "tower",
  "typed-builder",
  "wreq",
 ]
